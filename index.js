@@ -3,22 +3,26 @@
 const raw = require('./cake-recipes.json');
 const readline = require('readline');
 
-// ---- readline helpers ----
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+// === Setup readline interface ===
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+});
+
 const ask = (q) => new Promise((res) => rl.question(q, (ans) => res(ans.trim())));
 
-// ---- Data (array, hoofdletter-sleutels) ----
+// === Load and normalize data ===
 const recipes = Array.isArray(raw) ? raw : [];
 
-// Accessors afgestemd op jouw JSON
+// === Accessors (support hoofdletter-sleutels) ===
 const getName = (r) => r?.Name ?? r?.name ?? r?.Title ?? null;
 const getAuthor = (r) => r?.Author ?? r?.author ?? r?.Chef ?? null;
 const getIngredients = (r) => r?.Ingredients ?? r?.ingredients ?? [];
 
-// ---- Global store voor opgeslagen ingrediënten ----
-let savedIngredients = []; // cumulatief, over meerdere recepten heen
+// === Global storage for saved ingredients ===
+let savedIngredients = [];
 
-// ---- Utility ----
+// === Utility functions ===
 function mergeUnique(base, toAdd) {
   const seen = new Set(base.map((x) => String(x)));
   toAdd.forEach((x) => {
@@ -32,50 +36,58 @@ function mergeUnique(base, toAdd) {
 }
 
 function printRecipeDetails(recipe) {
-  if (!recipe) return console.log('No recipe found.');
+  if (!recipe) {
+    console.log('No recipe found.');
+    return;
+  }
+
   console.log(`\nName: ${getName(recipe) ?? '(unnamed recipe)'}`);
-  const a = getAuthor(recipe);
-  if (a) console.log(`Author: ${a}`);
+  const author = getAuthor(recipe);
+  if (author) console.log(`Author: ${author}`);
   if (recipe.url) console.log(`URL: ${recipe.url}`);
   if (recipe.Description) console.log(`Description: ${recipe.Description}`);
-  const ing = getIngredients(recipe);
+
+  const ingredients = getIngredients(recipe);
   console.log('\nIngredients:');
-  if (ing.length === 0) console.log('- (none)');
-  else ing.forEach((i) => console.log(`- ${i}`));
+  if (ingredients.length === 0) {
+    console.log('- (none)');
+  } else {
+    ingredients.forEach((i) => console.log(`- ${i}`));
+  }
 }
 
-// ---- Functies volgens opdracht ----
+// === Core functions (assignment requirements) ===
 
-// 1) Unieke auteurs (forEach)
+// 1. Unique authors (.forEach)
 function getUniqueAuthors(list) {
-  const s = new Set();
+  const authors = new Set();
   list.forEach((r) => {
     const a = getAuthor(r);
-    if (a) s.add(a);
+    if (a) authors.add(a);
   });
-  return [...s];
+  return [...authors];
 }
 
-// 2) Namen loggen (met destructuring)
+// 2. Log recipe names (object destructuring)
 function printRecipeNames(list) {
   if (!list || list.length === 0) {
     console.log('No recipes found.');
     return;
   }
-  // object destructuring met fallback voor verschillende naamvelden
+
   list.forEach(({ Name: NameUP, name: nameLow, Title }) => {
     const display = NameUP ?? nameLow ?? Title ?? '(unnamed recipe)';
     console.log(display);
   });
 }
 
-// 3) Recepten per auteur (filter)
+// 3. Filter by author (.filter)
 function getRecipesByAuthor(list, author) {
   const q = String(author).toLowerCase();
   return list.filter((r) => (getAuthor(r) || '').toLowerCase() === q);
 }
 
-// 4) Recepten per ingrediënt (filter + some)
+// 4. Filter by ingredient (.filter + .some)
 function getRecipesByIngredient(list, ingredient) {
   const q = String(ingredient).toLowerCase();
   return list.filter((r) =>
@@ -83,18 +95,18 @@ function getRecipesByIngredient(list, ingredient) {
   );
 }
 
-// 5) Recept op naam (find + includes)
+// 5. Find by name (.find + .includes)
 function findRecipeByName(list, name) {
   const q = String(name).toLowerCase();
   return list.find((r) => (getName(r) || '').toLowerCase().includes(q));
 }
 
-// 6) Alle ingrediënten (reduce)
+// 6. Flatten ingredients (.reduce)
 function getAllIngredients(list) {
   return list.reduce((all, r) => all.concat(getIngredients(r)), []);
 }
 
-// ---- Menu ----
+// === Menu ===
 function showMenu() {
   console.log('\nRecipe Management System Menu:');
   console.log('1. Show All Authors');
@@ -105,6 +117,7 @@ function showMenu() {
   console.log('0. Exit');
 }
 
+// === Main loop ===
 async function main() {
   if (!Array.isArray(recipes) || recipes.length === 0) {
     console.log('No recipes loaded. Check cake-recipes.json.');
@@ -119,17 +132,16 @@ async function main() {
     choice = Number.parseInt(rawChoice, 10);
 
     switch (choice) {
-      // Show All Authors
       case 1: {
         const authors = getUniqueAuthors(recipes).sort((a, b) => a.localeCompare(b));
         console.log('\nAll Authors:');
-        if (authors.length === 0) console.log('(none found)');
-        else authors.forEach((a) => console.log(a));
+        authors.length === 0
+          ? console.log('(none found)')
+          : authors.forEach((a) => console.log(a));
         await ask('\nPress Enter to continue...');
         break;
       }
 
-      // Show Recipe Names by Author
       case 2: {
         const author = await ask('Enter author name: ');
         const found = getRecipesByAuthor(recipes, author);
@@ -139,7 +151,6 @@ async function main() {
         break;
       }
 
-      // Show Recipe Names by Ingredient
       case 3: {
         const ingredient = await ask('Enter ingredient: ');
         const found = getRecipesByIngredient(recipes, ingredient);
@@ -149,7 +160,6 @@ async function main() {
         break;
       }
 
-      // Get Recipe by Name (+ save ingredients)
       case 4: {
         const name = await ask('Enter recipe name (or part of it): ');
         const recipe = findRecipeByName(recipes, name);
@@ -157,11 +167,14 @@ async function main() {
         printRecipeDetails(recipe);
 
         if (recipe) {
-          const save = (await ask('\nSave this recipe’s ingredients? (y/n): ')).toLowerCase();
+          const save = (await ask('\nSave this recipe’s ingredients? (y/n): '))
+            .toLowerCase();
           if (save === 'y' || save === 'yes') {
             const ing = getIngredients(recipe);
             mergeUnique(savedIngredients, ing);
-            console.log(`Saved ${ing.length} ingredients. Total saved items: ${savedIngredients.length}.`);
+            console.log(
+              `Saved ${ing.length} ingredients. Total saved items: ${savedIngredients.length}.`
+            );
           } else {
             console.log('Not saved.');
           }
@@ -170,7 +183,6 @@ async function main() {
         break;
       }
 
-      // Get All Ingredients of Saved Recipes
       case 5: {
         console.log('\nAll Saved Ingredients:');
         if (savedIngredients.length === 0) {
@@ -193,5 +205,12 @@ async function main() {
 
   rl.close();
 }
+
+// === Graceful exit on Ctrl+C ===
+process.on('SIGINT', () => {
+  console.log('\nExiting...');
+  rl.close();
+  process.exit(0);
+});
 
 main();
